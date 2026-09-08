@@ -18,6 +18,7 @@ package scaleway
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -738,15 +739,33 @@ func TestConvertTaints(t *testing.T) {
 		assert.Empty(t, k8sTaints)
 	})
 
-	t.Run("value is kept as-is", func(t *testing.T) {
+	t.Run("valid keys and values are kept as-is", func(t *testing.T) {
 		taints := []scalewaygo.Taint{
-			{Key: "key1", Value: "value:with:colons", Effect: "NoSchedule"},
+			{Key: "example.com/key1", Value: "value.with-separators_1", Effect: "NoSchedule"},
 		}
 
 		k8sTaints := convertTaints(taints)
-		assert.Len(t, k8sTaints, 1)
-		assert.Equal(t, "key1", k8sTaints[0].Key)
-		assert.Equal(t, "value:with:colons", k8sTaints[0].Value)
+		require.Len(t, k8sTaints, 1)
+		assert.Equal(t, "example.com/key1", k8sTaints[0].Key)
+		assert.Equal(t, "value.with-separators_1", k8sTaints[0].Value)
+		assert.Equal(t, apiv1.TaintEffectNoSchedule, k8sTaints[0].Effect)
+	})
+
+	t.Run("taints with invalid key or value are skipped", func(t *testing.T) {
+		taints := []scalewaygo.Taint{
+			{Key: "key1", Value: "value:with:colons", Effect: "NoSchedule"},
+			{Key: "key with spaces", Value: "value1", Effect: "NoSchedule"},
+			{Key: "not/a/valid/key", Value: "value1", Effect: "NoSchedule"},
+			{Key: "", Value: "value1", Effect: "NoSchedule"},
+			{Key: strings.Repeat("k", 64), Value: "value1", Effect: "NoSchedule"},
+			{Key: "key2", Value: strings.Repeat("v", 64), Effect: "NoSchedule"},
+			{Key: "key3", Value: "value3", Effect: "NoSchedule"},
+		}
+
+		k8sTaints := convertTaints(taints)
+		require.Len(t, k8sTaints, 1)
+		assert.Equal(t, "key3", k8sTaints[0].Key)
+		assert.Equal(t, "value3", k8sTaints[0].Value)
 		assert.Equal(t, apiv1.TaintEffectNoSchedule, k8sTaints[0].Effect)
 	})
 

@@ -19,9 +19,11 @@ package scaleway
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/api/validate/content"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/autoscaler/cluster-autoscaler/cloudprovider/scaleway/scalewaygo"
 	"k8s.io/klog/v2"
@@ -313,6 +315,16 @@ func convertTaints(taints []scalewaygo.Taint) []apiv1.Taint {
 		case apiv1.TaintEffectPreferNoSchedule:
 			effect = apiv1.TaintEffectPreferNoSchedule
 		default:
+			klog.Warningf("ignoring taint %s with unsupported effect %s", taint.Key, taint.Effect)
+			continue
+		}
+
+		if errs := content.IsLabelKey(taint.Key); len(errs) > 0 {
+			klog.Warningf("ignoring taint with invalid key %s: %s", taint.Key, strings.Join(errs, "; "))
+			continue
+		}
+		if errs := content.IsLabelValue(taint.Value); len(errs) > 0 {
+			klog.Warningf("ignoring taint %s with invalid value %s: %s", taint.Key, taint.Value, strings.Join(errs, "; "))
 			continue
 		}
 
